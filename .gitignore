@@ -1,0 +1,15 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Test credentials
+config/credentials.py
+
+# Test logs
+logs/
+
+# Editor / temporary files
+*.swp
+*.swo
+*~

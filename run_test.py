@@ -1,7 +1,6 @@
 from config.testbed import (
     CONTROL_DATA_IP,
     DUT_IP,
-    DUT_WIFI_SSID,
     STA_MGMT_IP,
     STA_WIFI_INTERFACE,
 )
@@ -17,10 +16,22 @@ from device.dut import DUT
 from device.golden_sta import GoldenSTA
 from library.logger import TestLogger
 
+from testcase.connectivity import ConnectivityTest
+from testcase.runner import TestRunner
+from testcase.wifi_link import WiFiLinkTest
+from testcase.wifi_signal import WiFiSignalTest
+from testcase.throughput import ThroughputTest
+
+import os
+
+from library.result_writer import write_result_json
+from library.iperf_server import IperfServer
 
 def main():
 
     logger = TestLogger()
+
+    iperf_server = IperfServer()
 
     logger.info("================================")
     logger.info(" WiFi Automation Framework")
@@ -34,14 +45,7 @@ def main():
         logger=logger
     )
 
-    sta = GoldenSTA(
-        host=STA_MGMT_IP,
-        username=STA_USERNAME,
-        password=STA_PASSWORD,
-        wifi_interface=STA_WIFI_INTERFACE,
-        ssid=DUT_WIFI_SSID,
-        logger=logger
-    )
+    sta = None
 
     try:
 
@@ -70,10 +74,52 @@ def main():
         )
 
         # --------------------------------
+        # DUT Radio Discovery
+        # --------------------------------
+
+        logger.info("[3] Discover DUT Radio")
+
+        radio = dut.get_radio_info("wlan0")
+
+        logger.info(
+            f"DUT radio interface : {radio['interface']}"
+        )
+
+        logger.info(
+            f"DUT radio SSID      : {radio['ssid']}"
+        )
+
+        logger.info(
+            f"DUT radio BSSID     : {radio['bssid']}"
+        )
+
+        logger.info(
+            f"DUT radio frequency : "
+            f"{radio['frequency_ghz']} GHz"
+        )
+
+        logger.pass_result(
+            "DUT radio discovery"
+        )
+
+        # --------------------------------
+        # Create Golden STA
+        # --------------------------------
+
+        sta = GoldenSTA(
+            host=STA_MGMT_IP,
+            username=STA_USERNAME,
+            password=STA_PASSWORD,
+            wifi_interface=STA_WIFI_INTERFACE,
+            ssid=radio["ssid"],
+            logger=logger
+        )
+
+        # --------------------------------
         # STA Management
         # --------------------------------
 
-        logger.info("[3] Connect Golden STA")
+        logger.info("[4] Connect Golden STA")
 
         sta.connect()
 
@@ -82,22 +128,77 @@ def main():
         )
 
         # --------------------------------
+        # Configure Target BSSID
+        # --------------------------------
+
+        logger.info("[5] Configure Target BSSID")
+
+        result = sta.set_wifi_bssid(
+            radio["bssid"]
+        )
+
+        if result["exit_code"] != 0:
+            raise RuntimeError(
+                "Failed to configure target BSSID: "
+                f"{result['stderr']}"
+            )
+
+        result = sta.get_configured_bssid()
+
+        configured_bssid = (
+            result["stdout"]
+            .strip()
+            .lower()
+            .replace("\\:", ":")
+        )
+
+        logger.info(
+            f"Target BSSID     : {radio['bssid']}"
+        )
+
+        logger.info(
+            f"Configured BSSID : {configured_bssid}"
+        )
+
+        if configured_bssid != radio["bssid"]:
+            raise RuntimeError(
+                "Configured BSSID does not match "
+                "DUT target radio"
+            )
+
+        logger.pass_result(
+            "STA target BSSID configuration"
+        )
+
+        # --------------------------------
         # Prepare WiFi
         # --------------------------------
 
-        logger.info("[4] Prepare STA WiFi")
+        logger.info("[6] Prepare STA WiFi")
 
         wifi_ip = sta.prepare_wifi()
 
+        # Verify actual AP, not only SSID
+        matched = sta.verify_wifi_connection(
+            expected_ssid=radio["ssid"],
+            expected_bssid=radio["bssid"]
+        )
+
+        if not matched:
+            raise RuntimeError(
+                "STA connected to wrong DUT radio"
+            )
+
         logger.pass_result(
-            f"STA WiFi connected: {wifi_ip}"
+            f"STA WiFi connected to target radio: "
+            f"{wifi_ip}"
         )
 
         # --------------------------------
         # Validate Route
         # --------------------------------
 
-        logger.info("[5] Validate Data Route")
+        logger.info("[7] Validate Data Route")
 
         route = sta.get_route(
             CONTROL_DATA_IP
@@ -121,7 +222,7 @@ def main():
         # Ping DUT
         # --------------------------------
 
-        logger.info("[6] Ping DUT")
+        logger.info("[8] Ping DUT")
 
         ping_dut = sta.ping(DUT_IP)
 
@@ -139,7 +240,7 @@ def main():
         # --------------------------------
 
         logger.info(
-            "[7] Prepare DUT Firewall"
+            "[9] Prepare DUT Firewall"
         )
 
         dut.prepare_test_firewall(
@@ -156,7 +257,7 @@ def main():
         # --------------------------------
 
         logger.info(
-            "[8] Ping Control PC"
+            "[10] Ping Control PC"
         )
 
         ping_control = sta.ping(
@@ -200,6 +301,152 @@ def main():
             f"Control IP  : {CONTROL_DATA_IP}"
         )
 
+        logger.info(
+            f"Target SSID : {radio['ssid']}"
+        )
+
+        logger.info(
+            f"Target BSSID: {radio['bssid']}"
+        )
+
+        logger.info(
+            "================================"
+        )
+        logger.info(
+            " Prepare Test Services"
+        )
+        logger.info(
+            "================================"
+        )
+
+        logger.info(
+            "[SERVICE] Start iperf3 server"
+        )
+
+        iperf_server.start()
+
+        logger.pass_result(
+            "iperf3 server ready"
+        )
+
+        # --------------------------------
+        # Execute Test Cases
+        # --------------------------------
+
+        logger.info(
+            "================================"
+        )
+        
+        logger.info(
+            " Execute Test Cases"
+        )
+
+        logger.info(
+            "================================"
+        )
+
+        runner = TestRunner(
+            logger=logger
+        )
+
+        tc01 = ConnectivityTest(
+            sta=sta,
+            destination=DUT_IP,
+            test_id="TC01",
+            name="STA to DUT Connectivity",
+            ping_count=10,
+            max_packet_loss_percent=1.0
+        )
+
+        tc02 = ConnectivityTest(
+            sta=sta,
+            destination=CONTROL_DATA_IP,
+            test_id="TC02",
+            name="STA to Control Connectivity",
+            ping_count=10,
+            max_packet_loss_percent=1.0
+        )
+ 
+        tc03 = WiFiLinkTest(
+            sta=sta,
+            expected_ssid=radio["ssid"],
+            expected_bssid=radio["bssid"],
+            test_id="TC03",
+            name="WiFi Target Radio Validation"
+        )
+
+        tc04 = WiFiSignalTest(
+            sta=sta,
+            test_id="TC04",
+            name="WiFi Signal Validation",
+            min_signal_dbm=-70
+        )
+
+        tc05 = ThroughputTest(
+            sta=sta,
+            server_ip=CONTROL_DATA_IP,
+            test_id="TC05",
+            name="WiFi TCP Upload Throughput",
+            duration=10,
+            min_throughput_mbps=30.0,
+            reverse=False
+        )
+
+        tc06 = ThroughputTest(
+            sta=sta,
+            server_ip=CONTROL_DATA_IP,
+            test_id="TC06",
+            name="WiFi TCP Download Throughput",
+            duration=10,
+            min_throughput_mbps=30.0,
+            reverse=True
+        )
+
+        runner.run_test(tc01)
+        runner.run_test(tc02)
+        runner.run_test(tc03)
+        runner.run_test(tc04)
+        runner.run_test(tc05)
+        runner.run_test(tc06)
+
+        overall_pass = runner.print_summary()
+
+        logger.info(
+            "================================"
+        )
+
+        if overall_pass:
+            logger.pass_result(
+                "TEST SUITE PASSED"
+            )
+        else:
+            logger.fail_result(
+                "TEST SUITE FAILED"
+            )
+
+        logger.info(
+            "================================"
+        )
+
+        # --------------------------------
+        # Write Test Result JSON
+        # --------------------------------
+
+        result_file = os.path.join(
+            logger.run_dir,
+            "result.json"
+        )
+
+        write_result_json(
+            file_path=result_file,
+            run_id=logger.run_id,
+            results=runner.results
+        )
+
+        logger.info(
+            f"Result JSON: {result_file}"
+        )
+
     except Exception as e:
 
         logger.info(
@@ -220,7 +467,16 @@ def main():
 
     finally:
 
-        sta.close()
+        try:
+            iperf_server.stop()
+        except Exception as e:
+            logger.info(
+                f"[WARN] Failed to stop iperf3 server: {e}"
+            )        
+
+        if sta:
+            sta.close()
+
         dut.close()
 
         logger.info(

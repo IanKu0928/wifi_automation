@@ -138,3 +138,120 @@ class GoldenSTA:
 
     def close(self):
         self.client.close()
+
+    def verify_wifi_connection(self, expected_ssid, expected_bssid):
+        result = self.get_wifi_status()
+        output = result["stdout"]
+
+        ssid_match = re.search(
+            r"SSID:\s*(.+)",
+            output
+        )
+
+        bssid_match = re.search(
+            r"Connected to\s+([0-9A-Fa-f:]{17})",
+            output
+        )
+
+        if not ssid_match or not bssid_match:
+            return False
+
+        actual_ssid = ssid_match.group(1).strip()
+        actual_bssid = bssid_match.group(1).lower()
+
+        expected_bssid = expected_bssid.lower()
+
+        return (
+            actual_ssid == expected_ssid
+            and actual_bssid == expected_bssid
+        )
+
+    def set_wifi_bssid(self, bssid):
+        command = (
+            f'nmcli connection modify "{self.ssid}" '
+            f'802-11-wireless.bssid {bssid}'
+        )
+
+        return self.run_command(command)
+
+    def get_configured_bssid(self):
+        command = (
+            f'nmcli -g 802-11-wireless.bssid '
+            f'connection show "{self.ssid}"'
+        )
+
+        return self.run_command(command)
+
+    def prepare_target_wifi(self, expected_bssid):
+
+        print("[STA] Enable WiFi")
+        self.enable_wifi()
+
+        print(
+            f"[STA] Configure target BSSID: "
+            f"{expected_bssid}"
+        )
+
+        result = self.set_wifi_bssid(expected_bssid)
+
+        if result["exit_code"] != 0:
+            raise RuntimeError(
+                "Failed to configure target BSSID"
+            )
+
+        print(
+            f"[STA] Connect target SSID: "
+            f"{self.ssid}"
+        )
+
+        result = self.connect_wifi()
+
+        if result["exit_code"] != 0:
+            print(
+                "[STA] nmcli returned an error; "
+                "verifying actual WiFi state..."
+            )
+
+        start = time.time()
+
+        while time.time() - start < 15:
+
+            if self.verify_wifi_connection(
+                expected_ssid=self.ssid,
+                expected_bssid=expected_bssid
+            ):
+                print(
+                    "[STA] Connected to target BSSID"
+                )
+
+                wifi_ip = self.get_wifi_ip()
+
+                if wifi_ip:
+                    print(
+                        f"[STA] WiFi IP: {wifi_ip}"
+                    )
+                    return wifi_ip
+
+            time.sleep(1)
+
+        raise RuntimeError(
+            f"Failed to connect target BSSID: "
+            f"{expected_bssid}"
+        )
+
+    def run_iperf3(
+        self,
+        server_ip,
+        duration=10,
+        reverse=False
+    ):
+        command = (
+            f"iperf3 -c {server_ip} "
+            f"-t {duration} "
+            f"-J"
+        )
+
+        if reverse:
+            command += " -R"
+
+        return self.run_command(command)

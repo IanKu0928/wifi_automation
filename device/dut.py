@@ -1,5 +1,5 @@
 from library.telnet_client import TelnetClient
-
+import re
 
 class DUT:
     def __init__(self, host, username, password, logger=None):
@@ -100,3 +100,80 @@ class DUT:
 
     def close(self):
         self.client.close()
+
+    def get_radio_info(self, interface="wlan0"):
+        output = self.run_command(f"iwconfig {interface}")
+
+        ssid_match = re.search(r'ESSID:"([^"]+)"', output)
+        bssid_match = re.search(
+            r'Access Point:\s*([0-9A-Fa-f:]{17})',
+            output
+        )
+        freq_match = re.search(
+            r'Frequency:([0-9.]+)\s*GHz',
+            output
+        )
+
+        if not ssid_match:
+            raise RuntimeError(
+                f"Failed to get SSID from DUT {interface}"
+            )
+
+        if not bssid_match:
+            raise RuntimeError(
+                f"Failed to get BSSID from DUT {interface}"
+            )
+
+        if not freq_match:
+            raise RuntimeError(
+                f"Failed to get frequency from DUT {interface}"
+            )
+
+        return {
+            "interface": interface,
+            "ssid": ssid_match.group(1),
+            "bssid": bssid_match.group(1).lower(),
+            "frequency_ghz": float(freq_match.group(1)),
+        }
+
+    def get_ap_status(self, interface="wlan0"):
+        return self.run_command(
+            f"hostapd_cli -i {interface} status"
+        )
+
+    def disable_ap(self, interface="wlan0"):
+        print(f"[DUT] Disable AP: {interface}")
+
+        return self.run_command(
+            f"hostapd_cli -i {interface} disable"
+        )
+
+
+    def enable_ap(self, interface="wlan0"):
+        print(f"[DUT] Enable AP: {interface}")
+
+        return self.run_command(
+            f"hostapd_cli -i {interface} enable"
+        )
+
+    def is_ap_enabled(self, interface="wlan0"):
+        output = self.get_ap_status(interface)
+
+        return "state=ENABLED" in output
+
+    def reboot(self):
+        print("[DUT] Reboot DUT")
+
+        try:
+            self.run_command(
+                "reboot"
+            )
+        except (EOFError, OSError):
+            # Telnet disconnect after reboot is expected.
+            pass
+
+        # Current Telnet session is no longer usable.
+        try:
+            self.client.close()
+        except Exception:
+            pass

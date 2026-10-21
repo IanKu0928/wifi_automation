@@ -1,6 +1,7 @@
 import re
 
 from testcase.base_test import TestResult
+from library.rule_engine import RuleEngine
 
 
 class WiFiLinkTest:
@@ -65,9 +66,21 @@ class WiFiLinkTest:
                 metrics=metrics
             )
 
+        ssid_rule = RuleEngine.evaluate(
+            value=actual_ssid,
+            operator_symbol="==",
+            threshold=self.expected_ssid
+        )
+
+        bssid_rule = RuleEngine.evaluate(
+            value=actual_bssid,
+            operator_symbol="==",
+            threshold=self.expected_bssid
+        )
+
         passed = (
-            actual_ssid == self.expected_ssid
-            and actual_bssid == self.expected_bssid
+            ssid_rule["passed"]
+            and bssid_rule["passed"]
         )
 
         if passed:

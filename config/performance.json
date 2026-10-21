@@ -1,0 +1,15 @@
+{
+    "profile_name": "performance",
+    "connectivity": {
+        "ping_count": 20,
+        "max_packet_loss_percent": 1.0
+    },
+    "wifi_signal": {
+        "min_signal_dbm": -70
+    },
+    "throughput": {
+        "duration_sec": 30,
+        "upload_min_mbps": 30.0,
+        "download_min_mbps": 30.0
+    }
+}

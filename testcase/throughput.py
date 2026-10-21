@@ -1,5 +1,6 @@
 from testcase.base_test import TestResult
 from library.iperf_parser import parse_iperf3_json
+from library.rule_engine import RuleEngine
 
 
 class ThroughputTest:
@@ -55,10 +56,13 @@ class ThroughputTest:
                 metrics=metrics
             )
 
-        passed = (
-            receiver_mbps
-            >= self.min_throughput_mbps
+        rule = RuleEngine.evaluate(
+            value=receiver_mbps,
+            operator_symbol=">=",
+            threshold=self.min_throughput_mbps
         )
+
+        passed = rule["passed"]
 
         if passed:
 

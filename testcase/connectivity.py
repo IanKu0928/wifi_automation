@@ -1,5 +1,6 @@
 from testcase.base_test import TestResult
 from library.ping_parser import parse_ping_output
+from library.rule_engine import RuleEngine
 
 
 class ConnectivityTest:
@@ -51,10 +52,13 @@ class ConnectivityTest:
                 metrics=metrics
             )
 
-        passed = (
-            packet_loss
-            <= self.max_packet_loss_percent
+        rule = RuleEngine.evaluate(
+            value=packet_loss,
+            operator_symbol="<=",
+            threshold=self.max_packet_loss_percent
         )
+
+        passed = rule["passed"]
 
         if passed:
             message = (

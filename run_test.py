@@ -23,13 +23,51 @@ from testcase.wifi_signal import WiFiSignalTest
 from testcase.throughput import ThroughputTest
 
 import os
+import argparse
+from pathlib import Path
 
 from library.result_writer import write_result_json
 from library.iperf_server import IperfServer
+from library.config_loader import ConfigLoader
+
+def parse_args():
+
+    parser = argparse.ArgumentParser(
+        description="WiFi Automation Framework"
+    )
+
+    parser.add_argument(
+        "--profile",
+        choices=["default", "smoke", "performance"],
+        default="default",
+        help="Select test profile (default: default)"
+    )
+
+    return parser.parse_args()
 
 def main():
 
+    args = parse_args()
+
+    profile_files = {
+        "default": "test_profile.json",
+        "smoke": "smoke.json",
+        "performance": "performance.json"
+    }
+
+    config_path = (
+        Path(__file__).resolve().parent
+        / "config"
+        / profile_files[args.profile]
+    )
+
     logger = TestLogger()
+
+    config = ConfigLoader(config_path).load()
+
+    logger.info(
+        f"Test Profile: {config['profile_name']}"
+    )
 
     iperf_server = IperfServer()
 
@@ -354,8 +392,8 @@ def main():
             destination=DUT_IP,
             test_id="TC01",
             name="STA to DUT Connectivity",
-            ping_count=10,
-            max_packet_loss_percent=1.0
+            ping_count=config["connectivity"]["ping_count"],
+            max_packet_loss_percent=config["connectivity"]["max_packet_loss_percent"]
         )
 
         tc02 = ConnectivityTest(
@@ -363,8 +401,8 @@ def main():
             destination=CONTROL_DATA_IP,
             test_id="TC02",
             name="STA to Control Connectivity",
-            ping_count=10,
-            max_packet_loss_percent=1.0
+            ping_count=config["connectivity"]["ping_count"],
+            max_packet_loss_percent=config["connectivity"]["max_packet_loss_percent"]
         )
  
         tc03 = WiFiLinkTest(
@@ -379,7 +417,7 @@ def main():
             sta=sta,
             test_id="TC04",
             name="WiFi Signal Validation",
-            min_signal_dbm=-70
+            min_signal_dbm=config["wifi_signal"]["min_signal_dbm"]
         )
 
         tc05 = ThroughputTest(
@@ -387,8 +425,8 @@ def main():
             server_ip=CONTROL_DATA_IP,
             test_id="TC05",
             name="WiFi TCP Upload Throughput",
-            duration=10,
-            min_throughput_mbps=30.0,
+            duration=config["throughput"]["duration_sec"],
+            min_throughput_mbps=config["throughput"]["upload_min_mbps"],
             reverse=False
         )
 
@@ -397,8 +435,8 @@ def main():
             server_ip=CONTROL_DATA_IP,
             test_id="TC06",
             name="WiFi TCP Download Throughput",
-            duration=10,
-            min_throughput_mbps=30.0,
+            duration=config["throughput"]["duration_sec"],
+            min_throughput_mbps=config["throughput"]["download_min_mbps"],
             reverse=True
         )
 

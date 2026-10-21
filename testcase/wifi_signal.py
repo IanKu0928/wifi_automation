@@ -1,6 +1,7 @@
 import re
 
 from testcase.base_test import TestResult
+from library.rule_engine import RuleEngine
 
 
 class WiFiSignalTest:
@@ -48,9 +49,13 @@ class WiFiSignalTest:
             signal_match.group(1)
         )
 
-        passed = (
-            signal_dbm >= self.min_signal_dbm
+        rule = RuleEngine.evaluate(
+            value=signal_dbm,
+            operator_symbol=">=",
+            threshold=self.min_signal_dbm
         )
+
+        passed = rule["passed"]
 
         metrics = {
             "signal_dbm": signal_dbm,

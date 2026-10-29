@@ -1,6 +1,6 @@
 import time
 
-from config.testbed import DUT_IP
+from config.testbed import DUT_IP, DUT_WIFI_INTERFACE
 from config.credentials import DUT_USERNAME, DUT_PASSWORD
 from device.dut import DUT
 
@@ -37,44 +37,44 @@ try:
 
     print("[2] Check initial AP status")
 
-    if not dut.is_ap_enabled("wlan0"):
+    if not dut.is_ap_enabled(DUT_WIFI_INTERFACE):
         raise RuntimeError(
-            "wlan0 is not enabled before test"
+            f"{DUT_WIFI_INTERFACE} is not enabled before test"
         )
 
-    print("[PASS] wlan0 initial state = ENABLED")
+    print(f"[PASS] {DUT_WIFI_INTERFACE} initial state = ENABLED")
 
-    print("[3] Disable wlan0")
+    print(f"[3] Disable {DUT_WIFI_INTERFACE}")
 
-    dut.disable_ap("wlan0")
+    dut.disable_ap(DUT_WIFI_INTERFACE)
 
     if not wait_ap_state(
         dut,
-        "wlan0",
+        DUT_WIFI_INTERFACE,
         expected_enabled=False,
         timeout=10
     ):
         raise RuntimeError(
-            "wlan0 did not enter DISABLED state"
+            f"{DUT_WIFI_INTERFACE} did not enter DISABLED state"
         )
 
-    print("[PASS] wlan0 state = DISABLED")
+    print(f"[PASS] {DUT_WIFI_INTERFACE} state = DISABLED")
 
-    print("[4] Enable wlan0")
+    print(f"[4] Enable {DUT_WIFI_INTERFACE}")
 
-    dut.enable_ap("wlan0")
+    dut.enable_ap(DUT_WIFI_INTERFACE)
 
     if not wait_ap_state(
         dut,
-        "wlan0",
+        DUT_WIFI_INTERFACE,
         expected_enabled=True,
         timeout=10
     ):
         raise RuntimeError(
-            "wlan0 did not recover to ENABLED state"
+            f"{DUT_WIFI_INTERFACE} did not recover to ENABLED state"
         )
 
-    print("[PASS] wlan0 state = ENABLED")
+    print(f"[PASS] {DUT_WIFI_INTERFACE} state = ENABLED")
 
     print("[PASS] DUT AP Disable / Enable")
 

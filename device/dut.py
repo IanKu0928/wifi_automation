@@ -1,3 +1,4 @@
+from config.testbed import DUT_WIFI_INTERFACE
 from library.telnet_client import TelnetClient
 import re
 
@@ -33,7 +34,7 @@ class DUT:
         return self.run_command("ifconfig br0")
 
     def get_wifi_status(self):
-        return self.run_command("iwconfig wlan0")
+        return self.run_command(f"iwconfig {DUT_WIFI_INTERFACE}")
 
     def get_firewall_rules(self):
         return self.run_command(
@@ -101,7 +102,7 @@ class DUT:
     def close(self):
         self.client.close()
 
-    def get_radio_info(self, interface="wlan0"):
+    def get_radio_info(self, interface=DUT_WIFI_INTERFACE):
         output = self.run_command(f"iwconfig {interface}")
 
         ssid_match = re.search(r'ESSID:"([^"]+)"', output)
@@ -136,12 +137,12 @@ class DUT:
             "frequency_ghz": float(freq_match.group(1)),
         }
 
-    def get_ap_status(self, interface="wlan0"):
+    def get_ap_status(self, interface=DUT_WIFI_INTERFACE):
         return self.run_command(
             f"hostapd_cli -i {interface} status"
         )
 
-    def disable_ap(self, interface="wlan0"):
+    def disable_ap(self, interface=DUT_WIFI_INTERFACE):
         print(f"[DUT] Disable AP: {interface}")
 
         return self.run_command(
@@ -149,14 +150,14 @@ class DUT:
         )
 
 
-    def enable_ap(self, interface="wlan0"):
+    def enable_ap(self, interface=DUT_WIFI_INTERFACE):
         print(f"[DUT] Enable AP: {interface}")
 
         return self.run_command(
             f"hostapd_cli -i {interface} enable"
         )
 
-    def is_ap_enabled(self, interface="wlan0"):
+    def is_ap_enabled(self, interface=DUT_WIFI_INTERFACE):
         output = self.get_ap_status(interface)
 
         return "state=ENABLED" in output

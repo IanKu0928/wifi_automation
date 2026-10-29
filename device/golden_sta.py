@@ -1,5 +1,8 @@
 import time
 import re
+import shlex
+
+from config.testbed import DUT_WIFI_PASSWORD
 
 from library.ssh_client import SSHClient
 
@@ -12,11 +15,13 @@ class GoldenSTA:
         password,
         wifi_interface="wlp2s0",
         ssid="RTL867x-ADSL",
-        logger=None
+        logger=None,
+        wifi_password=DUT_WIFI_PASSWORD
     ):
         self.host = host
         self.wifi_interface = wifi_interface
         self.ssid = ssid
+        self.wifi_password = wifi_password
         self.logger = logger
 
         self.client = SSHClient(
@@ -28,8 +33,16 @@ class GoldenSTA:
     def connect(self):
         self.client.connect()
 
-    def run_command(self, command):
+    def run_command(self, command, sensitive_values=()):
         result = self.client.execute(command)
+
+        if sensitive_values:
+            result = dict(result)
+            for key in ("command", "stdout", "stderr"):
+                for value in sensitive_values:
+                    result[key] = result[key].replace(
+                        shlex.quote(value), "***"
+                    ).replace(value, "***")
 
         if self.logger:
             self.logger.log_sta(
@@ -45,11 +58,18 @@ class GoldenSTA:
         return self.run_command("nmcli radio wifi on")
 
     def connect_wifi(self):
-        command = (
-            f'nmcli dev wifi connect "{self.ssid}" '
-            f'ifname {self.wifi_interface}'
+        arguments = [
+            "nmcli", "dev", "wifi", "connect", self.ssid,
+            "ifname", self.wifi_interface
+        ]
+        sensitive_values = ()
+        if self.wifi_password:
+            arguments.extend(["password", self.wifi_password])
+            sensitive_values = (self.wifi_password,)
+
+        return self.run_command(
+            shlex.join(arguments), sensitive_values=sensitive_values
         )
-        return self.run_command(command)
 
     def get_wifi_status(self):
         return self.run_command(

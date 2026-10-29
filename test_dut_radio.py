@@ -1,4 +1,4 @@
-from config.testbed import DUT_IP
+from config.testbed import DUT_IP, DUT_WIFI_INTERFACE
 from config.credentials import DUT_USERNAME, DUT_PASSWORD
 from device.dut import DUT
 
@@ -12,7 +12,7 @@ dut = DUT(
 try:
     dut.connect()
 
-    radio = dut.get_radio_info("wlan0")
+    radio = dut.get_radio_info(DUT_WIFI_INTERFACE)
 
     print("DUT Radio Information")
     print("---------------------")

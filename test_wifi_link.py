@@ -1,4 +1,5 @@
 from config.testbed import (
+    DUT_WIFI_INTERFACE,
     DUT_IP,
     STA_MGMT_IP,
     STA_WIFI_INTERFACE,
@@ -38,9 +39,9 @@ def main():
 
         print("[PASS] DUT management connection")
 
-        print("[2] Discover DUT wlan0")
+        print(f"[2] Discover DUT {DUT_WIFI_INTERFACE}")
 
-        radio = dut.get_radio_info("wlan0")
+        radio = dut.get_radio_info(DUT_WIFI_INTERFACE)
 
         print(f"Expected SSID  : {radio['ssid']}")
         print(f"Expected BSSID : {radio['bssid']}")

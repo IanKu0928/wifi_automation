@@ -1,4 +1,5 @@
 from config.testbed import (
+    DUT_WIFI_INTERFACE,
     DUT_IP,
     STA_MGMT_IP,
     STA_WIFI_INTERFACE,
@@ -25,8 +26,8 @@ try:
     print("[1] Connect DUT")
     dut.connect()
 
-    print("[2] Get DUT wlan0 information")
-    radio = dut.get_radio_info("wlan0")
+    print(f"[2] Get DUT {DUT_WIFI_INTERFACE} information")
+    radio = dut.get_radio_info(DUT_WIFI_INTERFACE)
 
     print(f"DUT SSID      : {radio['ssid']}")
     print(f"DUT BSSID     : {radio['bssid']}")
@@ -69,7 +70,7 @@ try:
 
     if configured_bssid != radio["bssid"]:
         raise RuntimeError(
-            "Configured BSSID does not match DUT wlan0"
+            f"Configured BSSID does not match DUT {DUT_WIFI_INTERFACE}"
         )
 
     print("[PASS] BSSID configuration")
@@ -88,10 +89,10 @@ try:
 
     if not matched:
         raise RuntimeError(
-            "Golden STA is not connected to DUT wlan0"
+            f"Golden STA is not connected to DUT {DUT_WIFI_INTERFACE}"
         )
 
-    print("[PASS] Golden STA is connected to DUT wlan0")
+    print(f"[PASS] Golden STA is connected to DUT {DUT_WIFI_INTERFACE}")
 
 finally:
     if sta:

@@ -1,3 +1,5 @@
+import time
+
 class TestRunner:
 
     def __init__(self, logger=None):
@@ -5,8 +7,16 @@ class TestRunner:
         self.results = []
 
     def run_test(self, test):
+        
+        start = time.monotonic()
 
         result = test.run()
+
+        duration = time.monotonic() - start
+
+        result.metrics["execution_duration_sec"] = round(
+            duration, 3
+        )
 
         self.results.append(result)
 

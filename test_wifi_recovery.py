@@ -1,7 +1,7 @@
 import subprocess
 import time
 
-from config.testbed import DUT_IP
+from config.testbed import DUT_IP, DUT_WIFI_INTERFACE
 from config.credentials import DUT_USERNAME, DUT_PASSWORD
 from device.dut import DUT
 
@@ -62,7 +62,7 @@ def wait_telnet_recovery(dut, timeout=30):
     return False
 
 
-def wait_ap_enabled(dut, interface="wlan0", timeout=30):
+def wait_ap_enabled(dut, interface=DUT_WIFI_INTERFACE, timeout=30):
     print(
         f"[WAIT] Waiting for {interface} AP recovery"
     )
@@ -110,7 +110,7 @@ try:
 
     print("[2] Discover radio before reboot")
 
-    radio_before = dut.get_radio_info("wlan0")
+    radio_before = dut.get_radio_info(DUT_WIFI_INTERFACE)
 
     print(
         f"SSID      : {radio_before['ssid']}"
@@ -123,12 +123,12 @@ try:
         f"{radio_before['frequency_ghz']} GHz"
     )
 
-    if not dut.is_ap_enabled("wlan0"):
+    if not dut.is_ap_enabled(DUT_WIFI_INTERFACE):
         raise RuntimeError(
-            "wlan0 is not ENABLED before reboot"
+            f"{DUT_WIFI_INTERFACE} is not ENABLED before reboot"
         )
 
-    print("[PASS] Pre-reboot wlan0")
+    print(f"[PASS] Pre-reboot {DUT_WIFI_INTERFACE}")
 
     # --------------------------------
     # Reboot
@@ -211,15 +211,15 @@ try:
     # AP
     # --------------------------------
 
-    print("[7] Wait wlan0 AP recovery")
+    print(f"[7] Wait {DUT_WIFI_INTERFACE} AP recovery")
 
     if not wait_ap_enabled(
         dut,
-        interface="wlan0",
+        interface=DUT_WIFI_INTERFACE,
         timeout=30
     ):
         raise RuntimeError(
-            "wlan0 AP did not recover"
+            f"{DUT_WIFI_INTERFACE} AP did not recover"
         )
 
     ap_time = (
@@ -238,7 +238,7 @@ try:
     print("[8] Verify radio after reboot")
 
     radio_after = dut.get_radio_info(
-        "wlan0"
+        DUT_WIFI_INTERFACE
     )
 
     print(
@@ -277,7 +277,7 @@ try:
         )
 
     print(
-        "[PASS] wlan0 radio identity "
+        f"[PASS] {DUT_WIFI_INTERFACE} radio identity "
         "preserved"
     )
 

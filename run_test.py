@@ -1,4 +1,5 @@
 from config.testbed import (
+    DUT_WIFI_INTERFACE,
     CONTROL_DATA_IP,
     DUT_IP,
     STA_MGMT_IP,
@@ -26,9 +27,13 @@ import os
 import argparse
 from pathlib import Path
 
+import time
+from datetime import datetime
+
 from library.result_writer import write_result_json
 from library.iperf_server import IperfServer
 from library.config_loader import ConfigLoader
+from library.html_report import generate_html_report
 
 def parse_args():
 
@@ -63,11 +68,38 @@ def main():
 
     logger = TestLogger()
 
+    run_start_monotonic = time.monotonic()
+    run_start_time = datetime.now().astimezone().isoformat(
+        timespec="seconds"
+    )
+
     config = ConfigLoader(config_path).load()
 
     logger.info(
         f"Test Profile: {config['profile_name']}"
     )
+
+    metadata = {
+    "profile": config["profile_name"],
+        "dut": {
+            "ip": DUT_IP,
+            "version": None
+        },
+            "wifi": {
+            "interface": None,
+            "ssid": None,
+            "bssid": None,
+            "frequency_ghz": None
+        },
+        "sta": {
+            "management_ip": STA_MGMT_IP,
+            "wifi_ip": None,
+            "wifi_interface": STA_WIFI_INTERFACE
+        },
+        "control": {
+            "data_ip": CONTROL_DATA_IP
+        }
+    }
 
     iperf_server = IperfServer()
 
@@ -83,7 +115,9 @@ def main():
         logger=logger
     )
 
+    runner = None
     sta = None
+    run_error = None
 
     try:
 
@@ -107,9 +141,25 @@ def main():
 
         version = dut.get_version()
 
+        version_lines = [
+            line.strip()
+            for line in version.splitlines()
+            if line.strip()
+            and line.strip() != "#"
+            and line.strip() != "cat /etc/version"
+        ]
+
+        if not version_lines:
+            raise RuntimeError(
+                "Failed to parse DUT firmware version"
+            )
+
+        metadata["dut"]["version"] = version_lines[0]
+
         logger.info(
-            "DUT version collected"
+            f"DUT Firmware Version: {metadata['dut']['version']}"
         )
+
 
         # --------------------------------
         # DUT Radio Discovery
@@ -117,7 +167,14 @@ def main():
 
         logger.info("[3] Discover DUT Radio")
 
-        radio = dut.get_radio_info("wlan0")
+        radio = dut.get_radio_info(DUT_WIFI_INTERFACE)
+
+        metadata["wifi"].update({
+            "interface": radio["interface"],
+            "ssid": radio["ssid"],
+            "bssid": radio["bssid"],
+            "frequency_ghz": radio["frequency_ghz"]
+        })
 
         logger.info(
             f"DUT radio interface : {radio['interface']}"
@@ -215,6 +272,8 @@ def main():
         logger.info("[6] Prepare STA WiFi")
 
         wifi_ip = sta.prepare_wifi()
+
+        metadata["sta"]["wifi_ip"] = wifi_ip
 
         # Verify actual AP, not only SSID
         matched = sta.verify_wifi_connection(
@@ -466,26 +525,9 @@ def main():
             "================================"
         )
 
-        # --------------------------------
-        # Write Test Result JSON
-        # --------------------------------
-
-        result_file = os.path.join(
-            logger.run_dir,
-            "result.json"
-        )
-
-        write_result_json(
-            file_path=result_file,
-            run_id=logger.run_id,
-            results=runner.results
-        )
-
-        logger.info(
-            f"Result JSON: {result_file}"
-        )
-
     except Exception as e:
+
+        run_error = f"{type(e).__name__}: {e}"
 
         logger.info(
             "================================"
@@ -505,22 +547,101 @@ def main():
 
     finally:
 
+        cleanup_errors = []
+
         try:
             iperf_server.stop()
         except Exception as e:
+            cleanup_errors.append(
+                f"iperf3 cleanup: {type(e).__name__}: {e}"
+            )
+
+        if sta is not None:
+            try:
+                sta.close()
+            except Exception as e:
+                cleanup_errors.append(
+                    f"STA cleanup: {type(e).__name__}: {e}"
+                )
+
+        try:
+            dut.close()
+        except Exception as e:
+            cleanup_errors.append(
+                f"DUT cleanup: {type(e).__name__}: {e}"
+            )
+
+        for cleanup_error in cleanup_errors:
+            logger.fail_result(
+                f"Cleanup error: {cleanup_error}"
+            )
+
+        errors = []
+
+        if run_error is not None:
+            errors.append(run_error)
+
+        errors.extend(cleanup_errors)
+
+        final_error = (
+            "; ".join(errors)
+            if errors
+            else None
+        )
+
+        run_end_time = datetime.now().astimezone().isoformat(
+            timespec="seconds"
+        )
+
+        run_duration_sec = round(
+            time.monotonic() - run_start_monotonic,
+            3
+        )
+
+        timing = {
+            "start_time": run_start_time,
+            "end_time": run_end_time,
+            "duration_sec": run_duration_sec
+        }
+
+        result_file = os.path.join(
+            logger.run_dir,
+            "result.json"
+        )
+
+        write_result_json(
+            file_path=result_file,
+            run_id=logger.run_id,
+            results=runner.results if runner else [],
+            metadata=metadata,
+            timing=timing,
+            error=final_error
+        )
+
+        try:
+            html_file = generate_html_report(result_file)
+
             logger.info(
-                f"[WARN] Failed to stop iperf3 server: {e}"
-            )        
+                f"HTML Report: {html_file}"
+            )
 
-        if sta:
-            sta.close()
+        except Exception as e:
+            logger.fail_result(
+                f"HTML Report Generation Failed: {e}"
+            )
 
-        dut.close()
+        logger.info(
+            f"Result JSON: {result_file}"
+        )
+
+        logger.info(
+            f"Total Execution Duration: "
+            f"{run_duration_sec:.3f} sec"
+        )
 
         logger.info(
             f"Log directory: {logger.run_dir}"
         )
-
 
 if __name__ == "__main__":
     main()

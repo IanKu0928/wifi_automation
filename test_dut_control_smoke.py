@@ -2,6 +2,7 @@ import subprocess
 import time
 
 from config.testbed import (
+    DUT_WIFI_INTERFACE,
     DUT_IP,
     CONTROL_DATA_IP,
     STA_MGMT_IP,
@@ -95,7 +96,7 @@ def wait_telnet_recovery(dut, timeout=30):
 
 def wait_ap_enabled(
     dut,
-    interface="wlan0",
+    interface=DUT_WIFI_INTERFACE,
     timeout=30
 ):
     start = time.time()
@@ -218,9 +219,9 @@ try:
     # Discover target radio
     # --------------------------------------------------------
 
-    print("[2] Discover DUT wlan0")
+    print(f"[2] Discover DUT {DUT_WIFI_INTERFACE}")
 
-    radio = dut.get_radio_info("wlan0")
+    radio = dut.get_radio_info(DUT_WIFI_INTERFACE)
 
     target_ssid = radio["ssid"]
     target_bssid = radio["bssid"]
@@ -238,12 +239,12 @@ try:
         f"{radio['frequency_ghz']} GHz"
     )
 
-    if not dut.is_ap_enabled("wlan0"):
+    if not dut.is_ap_enabled(DUT_WIFI_INTERFACE):
         raise RuntimeError(
-            "wlan0 is not ENABLED"
+            f"{DUT_WIFI_INTERFACE} is not ENABLED"
         )
 
-    print("[PASS] DUT wlan0 ready")
+    print(f"[PASS] DUT {DUT_WIFI_INTERFACE} ready")
 
     # --------------------------------------------------------
     # Connect Golden STA management
@@ -388,15 +389,15 @@ try:
     # AP recovery
     # --------------------------------------------------------
 
-    print("[9] Wait DUT wlan0 recovery")
+    print(f"[9] Wait DUT {DUT_WIFI_INTERFACE} recovery")
 
     if not wait_ap_enabled(
         dut,
-        interface="wlan0",
+        interface=DUT_WIFI_INTERFACE,
         timeout=30
     ):
         raise RuntimeError(
-            "DUT wlan0 did not recover"
+            f"DUT {DUT_WIFI_INTERFACE} did not recover"
         )
 
     ap_time = (
@@ -404,7 +405,7 @@ try:
     )
 
     print(
-        f"[PASS] DUT wlan0 recovered "
+        f"[PASS] DUT {DUT_WIFI_INTERFACE} recovered "
         f"after {ap_time:.1f}s"
     )
 
@@ -415,7 +416,7 @@ try:
     print("[10] Verify DUT radio identity")
 
     radio_after = dut.get_radio_info(
-        "wlan0"
+        DUT_WIFI_INTERFACE
     )
 
     if (

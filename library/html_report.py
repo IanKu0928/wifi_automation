@@ -9,6 +9,10 @@ def html_text(value):
         return "-"
     return escape(str(value), quote=True)
 
+def format_metric(value):
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return f"{value:.2f}"
+    return html_text(value)
 
 def status_class(status):
     if status == "PASS":
@@ -119,6 +123,217 @@ def generate_html_report(json_path, html_path=None):
             '</section>'
         ).format(html_text(error))
 
+    # --------------------------------
+    # Week 9: Analysis Report Section
+    # --------------------------------
+
+    analysis_section = ""
+    comparison_section = ""
+
+    analysis_path = json_path.with_name("analysis.json")
+
+    if analysis_path.exists():
+        with analysis_path.open("r", encoding="utf-8") as f:
+            analysis_data = json.load(f)
+
+        findings = analysis_data.get("findings") or []
+        analysis_summary = analysis_data.get("summary") or {}
+        historical = (
+            analysis_data.get("historical_comparison") or {}
+        )
+
+        # Confirm the analysis belongs to this test run.
+        if analysis_data.get("run_id") != data.get("run_id"):
+            raise ValueError(
+                "Analysis JSON Run ID does not match Result JSON"
+            )
+
+        def render_list(items):
+            if not items:
+                return "<p>-</p>"
+
+            return "<ul>{}</ul>".format(
+                "".join(
+                    "<li>{}</li>".format(html_text(item))
+                    for item in items
+                )
+            )
+
+        finding_rows = []
+
+        for finding in findings:
+            severity = finding.get("severity", "INFO")
+            source = finding.get("source", "unknown")
+            test_ids = finding.get("test_ids") or []
+
+            detail = (
+                "<strong>Evidence:</strong> {}"
+                "<br><strong>Possible Causes:</strong> {}"
+                "<br><strong>Recommendations:</strong> {}"
+            ).format(
+                html_text(finding.get("evidence")),
+                render_list(finding.get("possible_causes")),
+                render_list(finding.get("recommendations"))
+            )
+
+            finding_rows.append(
+                "<tr>"
+                "<td>{}</td>"
+                "<td>{}</td>"
+                '<td class="analysis-rule">{}</td>'
+                "<td>{}</td>"
+                "<td>{}</td>"
+                "</tr>".format(
+                    html_text(severity),
+                    html_text(source),
+                    html_text(finding.get("rule_id")),
+                    html_text(
+                        ", ".join(test_ids) if test_ids else "-"
+                    ),
+                    "<strong>{}</strong><br>{}".format(
+                        html_text(finding.get("title")),
+                        detail
+                    )
+                )
+            )
+
+        if not finding_rows:
+            finding_rows.append(
+                '<tr><td colspan="5">'
+                'No analysis findings available.'
+                '</td></tr>'
+            )
+
+        analysis_section = """
+        <section>
+          <h2>Automated Analysis &amp; Recommendations</h2>
+          <p>
+            Rule-based analysis only. Findings are diagnostic
+            observations and do not change the original
+            test PASS / FAIL / ERROR status.
+          </p>
+          <p>
+            <strong>Total Findings:</strong> {total}
+            &nbsp; | &nbsp;
+            <strong>Critical:</strong> {critical}
+            &nbsp; | &nbsp;
+            <strong>Warning:</strong> {warning}
+            &nbsp; | &nbsp;
+            <strong>Info:</strong> {info}
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Severity</th>
+                  <th>Source</th>
+                  <th>Rule ID</th>
+                  <th>Test Cases</th>
+                  <th>Analysis Details</th>
+                </tr>
+              </thead>
+              <tbody>{rows}</tbody>
+            </table>
+          </div>
+        </section>
+        """.format(
+            total=html_text(
+                analysis_summary.get("total_findings", 0)
+            ),
+            critical=html_text(
+                analysis_summary.get("critical", 0)
+            ),
+            warning=html_text(
+                analysis_summary.get("warning", 0)
+            ),
+            info=html_text(
+                analysis_summary.get("info", 0)
+            ),
+            rows="\n".join(finding_rows)
+        )
+
+        # --------------------------------
+        # Historical Comparison Table
+        # --------------------------------
+
+        comparison_rows = []
+
+        for name, metric in (
+            historical.get("metrics") or {}
+        ).items():
+            comparison_rows.append(
+                "<tr>"
+                "<td>{}</td>"
+                "<td>{}</td>"
+                "<td>{}</td>"
+                "<td>{}</td>"
+                "<td>{}</td>"
+                "</tr>".format(
+                    html_text(name),
+                    format_metric(metric.get("current")),
+                    format_metric(metric.get("historical_median")),
+                    html_text(metric.get("historical_samples")),
+                    html_text(
+                        "YES" if metric.get("baseline_ready")
+                        else "NO"
+                    )
+                )
+            )
+
+        if not comparison_rows:
+            comparison_rows.append(
+                '<tr><td colspan="5">'
+                'No comparable metrics available.'
+                '</td></tr>'
+            )
+
+        comparison_section = """
+        <section>
+          <h2>Historical Comparison</h2>
+          <p>
+            <strong>Status:</strong> {status}
+            &nbsp; | &nbsp;
+            <strong>Prior Runs:</strong> {count}
+          </p>
+          <p>{reason}</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Metric</th>
+                  <th>Current</th>
+                  <th>Historical Median</th>
+                  <th>Samples</th>
+                  <th>Baseline Ready</th>
+                </tr>
+              </thead>
+              <tbody>{rows}</tbody>
+            </table>
+          </div>
+          <p>
+            Historical comparisons are only indicative
+            when sufficient comparable samples exist.
+          </p>
+        </section>
+        """.format(
+            status=html_text(historical.get("status")),
+            count=html_text(
+                historical.get("historical_run_count")
+            ),
+            reason=html_text(historical.get("reason")),
+            rows="\n".join(comparison_rows)
+        )
+
+    else:
+        analysis_section = """
+        <section>
+          <h2>Automated Analysis</h2>
+          <p>
+            Analysis data is not available for this run.
+          </p>
+        </section>
+        """
+
     html = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -198,6 +413,11 @@ h2 {{ margin-top: 0; font-size: 20px; }}
 .error {{ background: #fff0d9; color: #915500; }}
 
 .table-wrap {{ overflow-x: auto; }}
+.analysis-rule {{
+    min-width: 180px;
+    overflow-wrap: normal;
+    word-break: normal;
+}}
 
 table {{
     border-collapse: collapse;
@@ -292,6 +512,9 @@ footer {{
 </div>
 </section>
 
+{analysis_section}
+
+{comparison_section}
 <footer>Generated by WiFi Automation Framework</footer>
 
 </div>
@@ -306,7 +529,9 @@ footer {{
         failed=html_text(summary.get("fail", 0)),
         error_section=error_section,
         info_rows=info_rows,
-        testcase_rows="\n".join(testcase_rows)
+        testcase_rows="\n".join(testcase_rows),
+        analysis_section=analysis_section,
+        comparison_section=comparison_section
     )
 
     html_path.parent.mkdir(parents=True, exist_ok=True)

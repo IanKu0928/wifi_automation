@@ -34,6 +34,7 @@ from library.result_writer import write_result_json
 from library.iperf_server import IperfServer
 from library.config_loader import ConfigLoader
 from library.html_report import generate_html_report
+from library.analysis_writer import generate_analysis_json
 
 def parse_args():
 
@@ -617,6 +618,32 @@ def main():
             timing=timing,
             error=final_error
         )
+
+        # --------------------------------
+        # Week 9: Rule-based Analysis
+        # --------------------------------
+        try:
+            analysis_file = generate_analysis_json(
+                result_path=result_file,
+                log_dir=str(
+                    Path(__file__).resolve().parent / "logs"
+                ),
+                min_samples=3
+            )
+
+            logger.info(
+                f"Analysis JSON: {analysis_file}"
+            )
+
+        except Exception as e:
+            logger.fail_result(
+                f"Analysis JSON Generation Failed: "
+                f"{type(e).__name__}: {e}"
+            )
+
+        # --------------------------------
+        # Week 8: HTML Report
+        # --------------------------------
 
         try:
             html_file = generate_html_report(result_file)

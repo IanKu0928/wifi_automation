@@ -1,0 +1,6 @@
+# Reference only: deployment uses Ubuntu apt packages, not pip.
+# Control PC: Ubuntu 24.04 / Python 3.12; external Python import: paramiko.
+# Tested Paramiko: 2.12.0 (python3-paramiko); see install_control.sh.
+# telnetlib is supplied by Python 3.12 and removed in Python 3.13.
+# No pip dependencies are declared; pip install -r requirements.txt installs nothing.
+# Virtual environments and alternative Paramiko versions require separate validation.

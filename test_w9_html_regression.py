@@ -7,15 +7,30 @@ from pathlib import Path
 from library.html_report import generate_html_report
 
 
-SOURCE_DIR = Path("logs/20261102_103837")
-
-source_result = json.loads(
-    (SOURCE_DIR / "result.json").read_text(encoding="utf-8")
-)
-
-source_analysis = json.loads(
-    (SOURCE_DIR / "analysis.json").read_text(encoding="utf-8")
-)
+# Synthetic fixture: keep regression independent of production logs.
+source_result = {
+    "run_id": "20261109_142504_001",
+    "overall_status": "PASS",
+    "summary": {"total": 6, "pass": 6, "fail": 0},
+    "testcases": [
+        {"test_id": f"TC{i:02d}", "name": "Synthetic case",
+         "status": "PASS", "message": "Synthetic result", "metrics": {}}
+        for i in range(1, 7)
+    ]
+}
+source_analysis = {
+    "run_id": source_result["run_id"],
+    "findings": [{"rule_id": "THROUGHPUT_DEGRADATION",
+                  "severity": "WARNING", "test_ids": ["TC05"],
+                  "title": "Synthetic throughput degradation"}],
+    "historical_comparison": {
+        "status": "READY", "historical_run_count": 3,
+        "metrics": {"TC05.receiver_mbps": {
+            "current": 100, "historical_median": 179.12,
+            "historical_samples": 3, "baseline_ready": True
+        }}
+    }
+}
 
 
 def save_json(path, data):

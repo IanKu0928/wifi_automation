@@ -33,7 +33,12 @@ class ConfigLoader:
                 f"{field} must be numeric"
             )
 
-        if not math.isfinite(value):
+        try:
+            finite = math.isfinite(value)
+        except OverflowError:
+            finite = False
+
+        if not finite:
             raise ValueError(
                 f"{field} must be finite"
             )
@@ -62,6 +67,10 @@ class ConfigLoader:
             raise ValueError(
                 "Test configuration must be a JSON object"
             )
+
+        profile_name = config.get("profile_name")
+        if not isinstance(profile_name, str) or not profile_name.strip():
+            raise ValueError("profile_name must be a non-empty string")
 
         for section, fields in self.REQUIRED_FIELDS.items():
 

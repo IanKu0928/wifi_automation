@@ -1,5 +1,6 @@
 
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 from statistics import median
@@ -17,15 +18,28 @@ class HistoryComparator:
         self.min_samples = min_samples
 
     @staticmethod
-    def run_time(path):
-        # Only accept the framework's timestamp-based run directory.
+    def run_order_key(path):
+        # Sequence orders directory allocation, not test completion.
+        match = re.fullmatch(
+            r"([0-9]{8}_[0-9]{6})(?:_([0-9]{3,}))?",
+            Path(path).parent.name
+        )
+        if match is None:
+            return None
+        sequence = int(match.group(2) or 0)
+        if match.group(2) is not None and (
+            sequence == 0 or match.group(2) != f"{sequence:03d}"
+        ):
+            return None
         try:
-            return datetime.strptime(
-                Path(path).parent.name,
-                "%Y%m%d_%H%M%S"
-            )
+            return datetime.strptime(match.group(1), "%Y%m%d_%H%M%S"), sequence
         except ValueError:
             return None
+
+    @staticmethod
+    def run_time(path):
+        key = HistoryComparator.run_order_key(path)
+        return key[0] if key is not None else None
 
     def compare(self, current_path):
         current_path = Path(current_path).resolve()
@@ -43,7 +57,7 @@ class HistoryComparator:
             "source_runs": []
         }
 
-        current_time = self.run_time(current_path)
+        current_time = self.run_order_key(current_path)
         current_key = self.analyzer.comparison_key(current)
 
         if current_time is None or current_key is None:
@@ -66,7 +80,7 @@ class HistoryComparator:
 
         for item in candidates:
             path = Path(item["path"]).resolve()
-            timestamp = self.run_time(path)
+            timestamp = self.run_order_key(path)
 
             # Prevent self-comparison and future-data leakage.
             if path == current_path:
@@ -78,7 +92,7 @@ class HistoryComparator:
             historical.append(item)
 
         historical.sort(
-            key=lambda item: self.run_time(item["path"])
+            key=lambda item: self.run_order_key(item["path"])
         )
 
         result["historical_run_count"] = len(historical)

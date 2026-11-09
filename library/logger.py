@@ -6,17 +6,20 @@ class TestLogger:
 
     def __init__(self, base_dir="logs"):
 
-        self.run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-        self.run_dir = os.path.join(
-            base_dir,
-            self.run_id
-        )
-
-        os.makedirs(
-            self.run_dir,
-            exist_ok=True
-        )
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        os.makedirs(base_dir, exist_ok=True)
+        sequence = 0
+        while True:
+            run_id = timestamp if sequence == 0 else f"{timestamp}_{sequence:03d}"
+            run_dir = os.path.join(base_dir, run_id)
+            try:
+                os.mkdir(run_dir)
+            except FileExistsError:
+                sequence += 1
+            else:
+                self.run_id = run_id
+                self.run_dir = run_dir
+                break
 
         self.run_log = os.path.join(
             self.run_dir,

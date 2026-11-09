@@ -4,6 +4,7 @@ from config.testbed import (
     DUT_IP,
     STA_MGMT_IP,
     STA_WIFI_INTERFACE,
+    DUT_WIFI_PASSWORD,
 )
 
 from config.credentials import (
@@ -25,6 +26,7 @@ from testcase.throughput import ThroughputTest
 
 import os
 import argparse
+import sys
 from pathlib import Path
 
 import time
@@ -35,6 +37,18 @@ from library.iperf_server import IperfServer
 from library.config_loader import ConfigLoader
 from library.html_report import generate_html_report
 from library.analysis_writer import generate_analysis_json
+
+def safe_error(error):
+    """Keep exception type/reason while removing configured passwords."""
+    message = f"{type(error).__name__}: {error}"
+    secrets = (DUT_PASSWORD, STA_PASSWORD, DUT_WIFI_PASSWORD)
+    for secret in sorted(
+        {value for value in secrets if isinstance(value, str) and value},
+        key=len, reverse=True
+    ):
+        message = message.replace(secret, "[REDACTED]")
+    return message
+
 
 def parse_args():
 
@@ -74,19 +88,13 @@ def main():
         timespec="seconds"
     )
 
-    config = ConfigLoader(config_path).load()
-
-    logger.info(
-        f"Test Profile: {config['profile_name']}"
-    )
-
     metadata = {
-    "profile": config["profile_name"],
+        "profile": args.profile,
         "dut": {
             "ip": DUT_IP,
             "version": None
         },
-            "wifi": {
+        "wifi": {
             "interface": None,
             "ssid": None,
             "bssid": None,
@@ -102,25 +110,30 @@ def main():
         }
     }
 
-    iperf_server = IperfServer()
-
-    logger.info("================================")
-    logger.info(" WiFi Automation Framework")
-    logger.info("================================")
-    logger.info(f"Run ID: {logger.run_id}")
-
-    dut = DUT(
-        host=DUT_IP,
-        username=DUT_USERNAME,
-        password=DUT_PASSWORD,
-        logger=logger
-    )
-
+    iperf_server = None
+    dut = None
     runner = None
     sta = None
     run_error = None
 
     try:
+        config = ConfigLoader(config_path).load()
+        metadata["profile"] = config["profile_name"]
+        logger.info(f"Test Profile: {config['profile_name']}")
+
+        iperf_server = IperfServer()
+
+        logger.info("================================")
+        logger.info(" WiFi Automation Framework")
+        logger.info("================================")
+        logger.info(f"Run ID: {logger.run_id}")
+
+        dut = DUT(
+            host=DUT_IP,
+            username=DUT_USERNAME,
+            password=DUT_PASSWORD,
+            logger=logger
+        )
 
         # --------------------------------
         # DUT Management
@@ -526,9 +539,20 @@ def main():
             "================================"
         )
 
+    except KeyboardInterrupt:
+
+        run_error = (
+            "KeyboardInterrupt: "
+            "Test execution interrupted by user (Ctrl+C)"
+        )
+
+        logger.fail_result(
+            "TEST EXECUTION INTERRUPTED BY USER"
+        )
+
     except Exception as e:
 
-        run_error = f"{type(e).__name__}: {e}"
+        run_error = safe_error(e)
 
         logger.info(
             "================================"
@@ -539,7 +563,7 @@ def main():
         )
 
         logger.fail_result(
-            f"Error: {e}"
+            f"Error: {run_error}"
         )
 
         logger.info(
@@ -550,27 +574,25 @@ def main():
 
         cleanup_errors = []
 
-        try:
-            iperf_server.stop()
-        except Exception as e:
-            cleanup_errors.append(
-                f"iperf3 cleanup: {type(e).__name__}: {e}"
-            )
+        if iperf_server is not None:
+            try:
+                iperf_server.stop()
+            except Exception as e:
+                cleanup_errors.append(f"iperf3 cleanup: {safe_error(e)}")
 
         if sta is not None:
             try:
                 sta.close()
             except Exception as e:
                 cleanup_errors.append(
-                    f"STA cleanup: {type(e).__name__}: {e}"
+                    f"STA cleanup: {safe_error(e)}"
                 )
 
-        try:
-            dut.close()
-        except Exception as e:
-            cleanup_errors.append(
-                f"DUT cleanup: {type(e).__name__}: {e}"
-            )
+        if dut is not None:
+            try:
+                dut.close()
+            except Exception as e:
+                cleanup_errors.append(f"DUT cleanup: {safe_error(e)}")
 
         for cleanup_error in cleanup_errors:
             logger.fail_result(
@@ -610,14 +632,21 @@ def main():
             "result.json"
         )
 
-        write_result_json(
-            file_path=result_file,
-            run_id=logger.run_id,
-            results=runner.results if runner else [],
-            metadata=metadata,
-            timing=timing,
-            error=final_error
-        )
+        try:
+            write_result_json(
+                file_path=result_file,
+                run_id=logger.run_id,
+                results=runner.results if runner else [],
+                metadata=metadata,
+                timing=timing,
+                error=final_error
+            )
+
+        except Exception as e:
+            logger.fail_result(f"Result JSON Generation Failed: {safe_error(e)}")
+            return 1
+
+        report_failed = False
 
         # --------------------------------
         # Week 9: Rule-based Analysis
@@ -636,9 +665,9 @@ def main():
             )
 
         except Exception as e:
+            report_failed = True
             logger.fail_result(
-                f"Analysis JSON Generation Failed: "
-                f"{type(e).__name__}: {e}"
+                f"Analysis JSON Generation Failed: {safe_error(e)}"
             )
 
         # --------------------------------
@@ -653,8 +682,9 @@ def main():
             )
 
         except Exception as e:
+            report_failed = True
             logger.fail_result(
-                f"HTML Report Generation Failed: {e}"
+                f"HTML Report Generation Failed: {safe_error(e)}"
             )
 
         logger.info(
@@ -670,5 +700,8 @@ def main():
             f"Log directory: {logger.run_dir}"
         )
 
+    return 1 if final_error or report_failed else 0
+
+
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

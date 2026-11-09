@@ -1,12 +1,10 @@
 from device.golden_sta import GoldenSTA
 
 
-STA_IP = "192.168.205.140"
-STA_USERNAME = "root"
-STA_PASSWORD = "111111"
-
-CONTROL_DATA_IP = "192.168.1.2"
-DUT_IP = "192.168.1.1"
+from config.credentials import STA_USERNAME, STA_PASSWORD
+from config.testbed import (
+    STA_MGMT_IP, CONTROL_DATA_IP, DUT_IP, STA_WIFI_INTERFACE, DUT_WIFI_SSID,
+)
 
 
 def main():
@@ -16,9 +14,11 @@ def main():
     print("================================")
 
     sta = GoldenSTA(
-        host=STA_IP,
+        host=STA_MGMT_IP,
         username=STA_USERNAME,
-        password=STA_PASSWORD
+        password=STA_PASSWORD,
+        wifi_interface=STA_WIFI_INTERFACE,
+        ssid=DUT_WIFI_SSID
     )
 
     try:

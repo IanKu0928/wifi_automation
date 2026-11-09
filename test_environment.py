@@ -4,15 +4,19 @@ from device.golden_sta import GoldenSTA
 from config.testbed import (
     CONTROL_DATA_IP,
     DUT_IP,
-    DUT_USERNAME,
-    DUT_PASSWORD,
-    DUT_WIFI_SSID,
     STA_MGMT_IP,
-    STA_USERNAME,
-    STA_PASSWORD,
     STA_WIFI_INTERFACE,
+    DUT_WIFI_INTERFACE,
+    DUT_WIFI_SSID,
+    DUT_WIFI_PASSWORD,
 )
 
+from config.credentials import (
+    DUT_USERNAME,
+    DUT_PASSWORD,
+    STA_USERNAME,
+    STA_PASSWORD,
+)
 
 def main():
 

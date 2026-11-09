@@ -14,5 +14,24 @@ logs/
 *.swo
 *~
 
-# Backup files
+# Development backups
 *.bak
+*.backup
+*_backup
+*.w9_*_backup
+
+# Python virtual environments
+.venv/
+venv/
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Test cache
+.pytest_cache/
+.coverage
+
+# Local testbed configuration
+config/testbed.py

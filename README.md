@@ -57,7 +57,7 @@ requires separate dependency and compatibility validation.
 Obtain the repository and run Control PC commands from its root:
 
 ```bash
-git clone <YOUR_REPOSITORY_URL>
+git clone https://github.com/IanKu0928/wifi_automation.git
 cd wifi_automation
 ```
 
